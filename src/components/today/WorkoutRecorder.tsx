@@ -19,19 +19,41 @@ function categoryForDayType(dayType: DayType): ExerciseCategory {
   return dayType;
 }
 
-type SetInput = { reps: string; weight: string };
+type SetInput = {
+  reps: string;
+  weight: string;
+  targetReps?: number;
+  targetWeightHint?: number;
+};
 type SelectedExercise = { exercise: Exercise; sets: SetInput[] };
 
 type WorkoutLogResponse = {
   date: string;
   dayType: DayType | null;
   note: string | null;
+  aiComment: string | null;
   cardio: { exerciseId: string; targetMinutes: number | null; actualMinutes: number | null } | null;
-  exercises: { exerciseId: string; sets: { actualReps: number | null; actualWeight: number | null }[] }[];
+  exercises: {
+    exerciseId: string;
+    sets: {
+      targetReps: number | null;
+      targetWeightHint: number | null;
+      actualReps: number | null;
+      actualWeight: number | null;
+    }[];
+  }[];
 };
 
-// 今日画面:手動で種目タイプを選び、種目ごとのセット(回数・重量)を記録する(設計書 4.1節・5章)
-// TODO(Phase2): AI提案・インターバルタイマーは別のステップで実装する
+type SuggestionResponse = {
+  source: "ai" | "fallback";
+  dayType: DayType;
+  comment: string;
+  exercises: { exerciseId: string; targetReps?: number; targetWeightHint?: number }[];
+  cardio?: { exerciseId: string; targetMinutes?: number };
+};
+
+// 今日画面:AI提案 or 手動で種目タイプを選び、種目ごとのセット(回数・重量)を記録する(設計書 4.1節・5章・8章)
+// TODO(Phase2): インターバルタイマーは別のステップで実装する
 export function WorkoutRecorder() {
   const [isLoading, setIsLoading] = useState(true);
   const [dayType, setDayType] = useState<DayType | null>(null);
@@ -40,6 +62,10 @@ export function WorkoutRecorder() {
   const [cardioTargetMinutes, setCardioTargetMinutes] = useState("");
   const [cardioActualMinutes, setCardioActualMinutes] = useState("");
   const [note, setNote] = useState("");
+  const [aiComment, setAiComment] = useState<string | null>(null);
+  const [suggestionSource, setSuggestionSource] = useState<"ai" | "fallback" | null>(null);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +78,7 @@ export function WorkoutRecorder() {
       if (data.dayType) {
         setDayType(data.dayType);
         setNote(data.note ?? "");
+        setAiComment(data.aiComment);
         if (data.cardio) {
           setCardioExerciseId(data.cardio.exerciseId);
           setCardioTargetMinutes(
@@ -71,6 +98,8 @@ export function WorkoutRecorder() {
                 sets: entry.sets.map((set) => ({
                   reps: set.actualReps != null ? String(set.actualReps) : "",
                   weight: set.actualWeight != null ? String(set.actualWeight) : "",
+                  targetReps: set.targetReps ?? undefined,
+                  targetWeightHint: set.targetWeightHint ?? undefined,
                 })),
               },
             ];
@@ -88,6 +117,60 @@ export function WorkoutRecorder() {
     setCardioExerciseId("");
     setCardioTargetMinutes("");
     setCardioActualMinutes("");
+    setAiComment(null);
+    setSuggestionSource(null);
+  }
+
+  async function handleGetSuggestion() {
+    setSuggestionError(null);
+    setIsSuggesting(true);
+
+    const response = await fetch("/api/suggest", { method: "POST" });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setSuggestionError(data.error ?? "AI提案の取得に失敗しました");
+      setIsSuggesting(false);
+      return;
+    }
+
+    const suggestion = data as SuggestionResponse;
+    setDayType(suggestion.dayType);
+    setAiComment(suggestion.comment);
+    setSuggestionSource(suggestion.source);
+    setNote("");
+    setSelected(
+      suggestion.exercises.flatMap((suggested) => {
+        const exercise = getExerciseById(suggested.exerciseId);
+        if (!exercise) return [];
+        return [
+          {
+            exercise,
+            sets: [
+              {
+                reps: "",
+                weight: "",
+                targetReps: suggested.targetReps,
+                targetWeightHint: suggested.targetWeightHint,
+              },
+            ],
+          },
+        ];
+      }),
+    );
+    if (suggestion.cardio) {
+      setCardioExerciseId(suggestion.cardio.exerciseId);
+      setCardioTargetMinutes(
+        suggestion.cardio.targetMinutes != null ? String(suggestion.cardio.targetMinutes) : "",
+      );
+      setCardioActualMinutes("");
+    } else {
+      setCardioExerciseId("");
+      setCardioTargetMinutes("");
+      setCardioActualMinutes("");
+    }
+
+    setIsSuggesting(false);
   }
 
   function addExercise(exercise: Exercise) {
@@ -154,6 +237,8 @@ export function WorkoutRecorder() {
         sets: entry.sets
           .filter((set) => set.reps !== "" || set.weight !== "")
           .map((set) => ({
+            ...(set.targetReps != null ? { targetReps: set.targetReps } : {}),
+            ...(set.targetWeightHint != null ? { targetWeightHint: set.targetWeightHint } : {}),
             ...(set.reps !== "" ? { actualReps: Number(set.reps) } : {}),
             ...(set.weight !== "" ? { actualWeight: Number(set.weight) } : {}),
           })),
@@ -166,6 +251,7 @@ export function WorkoutRecorder() {
       body: JSON.stringify({
         dayType,
         ...(note !== "" ? { note } : {}),
+        ...(aiComment ? { aiComment } : {}),
         ...(dayType === "cardio_core" && cardioExerciseId !== ""
           ? {
               cardio: {
@@ -206,6 +292,29 @@ export function WorkoutRecorder() {
   return (
     <div className="space-y-6">
       {isLoading && <p className="text-sm text-neutral-400">保存済みの記録を読み込み中...</p>}
+
+      <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-4">
+        <button
+          type="button"
+          onClick={handleGetSuggestion}
+          disabled={isSuggesting}
+          className="min-h-[44px] w-full rounded-md bg-amber-500 font-medium text-neutral-950 disabled:opacity-50"
+        >
+          {isSuggesting ? "提案を作成中..." : "AI提案を受け取る"}
+        </button>
+        <p className="mt-2 text-xs text-neutral-500">
+          今日の体重・疲労度をもとに、種目タイプとメニューの目安を提案します(先に体重の記録が必要です)。
+        </p>
+        {suggestionError && <p className="mt-2 text-sm text-red-400">{suggestionError}</p>}
+        {aiComment && (
+          <div className="mt-3 rounded-md bg-neutral-900 p-3">
+            <p className="text-xs text-neutral-500">
+              {suggestionSource === "fallback" ? "標準メニュー(フォールバック)" : "AI提案"}
+            </p>
+            <p className="mt-1 text-sm text-neutral-200">{aiComment}</p>
+          </div>
+        )}
+      </div>
 
       <div>
         <span className="block text-sm text-neutral-400">種目タイプ</span>
@@ -329,7 +438,9 @@ export function WorkoutRecorder() {
                 <input
                   type="number"
                   inputMode="decimal"
-                  placeholder="回数"
+                  placeholder={
+                    set.targetReps != null ? `回数(目安${set.targetReps})` : "回数"
+                  }
                   value={set.reps}
                   onChange={(e) =>
                     updateSet(entry.exercise.id, index, "reps", e.target.value)
@@ -339,7 +450,11 @@ export function WorkoutRecorder() {
                 <input
                   type="number"
                   inputMode="decimal"
-                  placeholder="重量(kg)"
+                  placeholder={
+                    set.targetWeightHint != null
+                      ? `重量(目安${set.targetWeightHint}kg)`
+                      : "重量(kg)"
+                  }
                   value={set.weight}
                   onChange={(e) =>
                     updateSet(entry.exercise.id, index, "weight", e.target.value)

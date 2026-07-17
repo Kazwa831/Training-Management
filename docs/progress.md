@@ -312,3 +312,41 @@ UI側は当初、`WorkoutRecorder`が`useEffect`でのデータ取得中(`isLoad
 ### 次にやること
 
 - AIメニュー提案(`/api/suggest`)+ ルールベースフォールバック
+
+---
+
+## 2026-07-17: AIメニュー提案(/api/suggest)+ ルールベースフォールバックの実装
+
+### やったこと
+
+1. `src/lib/anthropic/client.ts`(新規):サーバー専用のAnthropicクライアント。`ANTHROPIC_API_KEY`未設定時は`null`を返し、呼び出し側でフォールバックへ切り替えられるようにした
+2. `src/lib/anthropic/suggest.ts`(新規):提案生成のコアロジック
+   - **種目タイプのローテーション**:直近の`workout_logs.day_type`から次のタイプを`legs→push→pull→cardio_core→...`の順で決定(履歴が無ければ`legs`)
+   - **AI呼び出し**:システムプロンプトに設計書8.2節の目標別調整方針(増量/減量/維持)をそのまま明記。ユーザープロンプトには体重・疲労度・身長・体脂肪率・目標・今日選べる種目一覧(カタログのid付き)を渡し、JSON形式のみで出力するよう指示
+   - **ハルシネーション対策**:AIが返した`exerciseId`が実際のカタログに存在するかを検証し、存在しないIDが含まれる場合はフォールバックに切り替える
+   - **フォールバック**:AI呼び出し失敗・JSONパース失敗・不正なIDを含む場合に発動。過去の実績(`workout_sets`)から種目ごとの直近使用重量を取得し、疲労度が高い日(4以上)は回数を10→8、重量目安を10%減らす簡易調整のみ行う(設計書8.3節:「ルールベース版は簡易調整に留めてよい」)
+3. `src/app/api/suggest/route.ts`(新規):今日の体重が未記録の場合は提案せず、分かりやすいエラーを返す。それ以外は上記ロジックを呼び出して結果を返す
+4. `src/app/api/workout-logs/route.ts`を拡張:`target_reps` / `target_weight_hint`(AI提案の目安値)と`ai_comment`(提案理由コメント)の保存・取得に対応
+5. `src/components/today/WorkoutRecorder.tsx`を拡張:「AI提案を受け取る」ボタンを追加。提案結果で種目タイプ・種目・目標reps/重量・コメントを自動セットし、実績値の入力欄には目安をプレースホルダーとして表示。提案元(AI/フォールバック)も画面に表示する
+
+### 動作確認
+
+`npm run dev`+curlで一連のフローを確認、確認後にテストデータを削除:
+
+1. 体重未記録の状態で`POST /api/suggest` → 400「先に体重を記録してください」✅
+2. 体重・疲労度(4:高疲労)を記録後、`ANTHROPIC_API_KEY`未設定の状態で`POST /api/suggest` → `source:"fallback"`、`dayType:"legs"`(履歴なしのデフォルト)、疲労度が高いため`targetReps:8`のメニューが返る ✅
+3. 下半身の記録を保存後、再度提案 → ローテーションにより`dayType:"push"`に切り替わることを確認 ✅
+4. `targetReps`/`targetWeightHint`/`aiComment`を含めて`POST /api/workout-logs`→`GET`で保存・取得できることを確認 ✅
+5. `ANTHROPIC_API_KEY`を実際の値に設定してもらい、`POST /api/suggest`を再実行 → `source:"ai"`で、目標(減量)・低疲労度を反映した妥当な提案(回数多め・実在するexerciseId)が生成されることを確認(応答時間 約4.3秒) ✅
+
+### 変更したファイル一覧
+
+- `src/lib/anthropic/client.ts`(新規)
+- `src/lib/anthropic/suggest.ts`(新規)
+- `src/app/api/suggest/route.ts`(新規)
+- `src/app/api/workout-logs/route.ts`:target_reps/target_weight_hint/ai_commentの入出力に対応
+- `src/components/today/WorkoutRecorder.tsx`:AI提案ボタン・提案結果の反映・目安のプレースホルダー表示を追加
+
+### 次にやること
+
+- セット間インターバルタイマー

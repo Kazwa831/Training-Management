@@ -5,6 +5,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getTodayDateString } from "@/lib/utils";
 
 const setSchema = z.object({
+  targetReps: z.number().int().positive().optional(),
+  targetWeightHint: z.number().min(0).optional(),
   actualReps: z.number().int().positive().optional(),
   actualWeight: z.number().min(0).optional(),
 });
@@ -24,6 +26,7 @@ const upsertSchema = z.object({
   date: z.iso.date().optional(), // 省略時は今日の日付を使う
   dayType: z.enum(["legs", "push", "pull", "cardio_core"]),
   note: z.string().optional(),
+  aiComment: z.string().optional(), // AI提案を使った場合の提案理由コメント(設計書8章)
   cardio: cardioSchema.optional(),
   exercises: z.array(exerciseEntrySchema).default([]),
 });
@@ -36,7 +39,7 @@ export async function GET(request: NextRequest) {
   const { data: log, error: logError } = await supabase
     .from("workout_logs")
     .select(
-      "id, date, day_type, note, cardio_exercise_id, cardio_target_minutes, cardio_actual_minutes",
+      "id, date, day_type, note, ai_comment, cardio_exercise_id, cardio_target_minutes, cardio_actual_minutes",
     )
     .eq("date", targetDate)
     .maybeSingle();
@@ -50,6 +53,7 @@ export async function GET(request: NextRequest) {
       date: targetDate,
       dayType: null,
       note: null,
+      aiComment: null,
       cardio: null,
       exercises: [],
     });
@@ -57,7 +61,7 @@ export async function GET(request: NextRequest) {
 
   const { data: sets, error: setsError } = await supabase
     .from("workout_sets")
-    .select("exercise_id, set_index, actual_reps, actual_weight")
+    .select("exercise_id, set_index, target_reps, target_weight_hint, actual_reps, actual_weight")
     .eq("workout_log_id", log.id)
     .order("set_index", { ascending: true });
 
@@ -69,7 +73,12 @@ export async function GET(request: NextRequest) {
   const exerciseIdOrder: string[] = [];
   const setsByExercise = new Map<
     string,
-    { actualReps: number | null; actualWeight: number | null }[]
+    {
+      targetReps: number | null;
+      targetWeightHint: number | null;
+      actualReps: number | null;
+      actualWeight: number | null;
+    }[]
   >();
   for (const set of sets ?? []) {
     if (!setsByExercise.has(set.exercise_id)) {
@@ -77,6 +86,8 @@ export async function GET(request: NextRequest) {
       exerciseIdOrder.push(set.exercise_id);
     }
     setsByExercise.get(set.exercise_id)!.push({
+      targetReps: set.target_reps,
+      targetWeightHint: set.target_weight_hint,
       actualReps: set.actual_reps,
       actualWeight: set.actual_weight,
     });
@@ -86,6 +97,7 @@ export async function GET(request: NextRequest) {
     date: log.date,
     dayType: log.day_type,
     note: log.note,
+    aiComment: log.ai_comment,
     cardio: log.cardio_exercise_id
       ? {
           exerciseId: log.cardio_exercise_id,
@@ -111,7 +123,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { date, dayType, note, cardio, exercises } = parsed.data;
+  const { date, dayType, note, aiComment, cardio, exercises } = parsed.data;
   const targetDate = date ?? getTodayDateString();
   const supabase = createSupabaseServerClient();
 
@@ -123,6 +135,7 @@ export async function POST(request: NextRequest) {
         date: targetDate,
         day_type: dayType,
         note: note ?? null,
+        ai_comment: aiComment ?? null,
         cardio_exercise_id: cardio?.exerciseId ?? null,
         cardio_target_minutes: cardio?.targetMinutes ?? null,
         cardio_actual_minutes: cardio?.actualMinutes ?? null,
@@ -155,6 +168,8 @@ export async function POST(request: NextRequest) {
       workout_log_id: log.id,
       exercise_id: exercise.exerciseId,
       set_index: index + 1,
+      target_reps: set.targetReps ?? null,
+      target_weight_hint: set.targetWeightHint ?? null,
       actual_reps: set.actualReps ?? null,
       actual_weight: set.actualWeight ?? null,
     })),
