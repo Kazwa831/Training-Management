@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { FatigueLevel } from "@/types/database";
 import { ExerciseCatalog } from "@/components/today/ExerciseCatalog";
 import { WorkoutRecorder } from "@/components/today/WorkoutRecorder";
+import { IntervalTimer } from "@/components/today/IntervalTimer";
 
 const FATIGUE_LEVELS: FatigueLevel[] = [1, 2, 3, 4, 5];
 
@@ -15,7 +16,6 @@ type BodyMetricsResponse = {
 };
 
 // 今日画面:体重・疲労度の入力(設計書 5章)
-// TODO(Phase2以前のMVP範囲): AI提案・インターバルタイマーは以降のステップで実装する
 export default function TodayPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [weightKg, setWeightKg] = useState("");
@@ -146,6 +146,9 @@ export default function TodayPage() {
           <ExerciseCatalog />
         </div>
       </section>
+
+      {/* セット間の休憩時間を計測するフローティングタイマー(設計書4.3節) */}
+      <IntervalTimer />
     </main>
   );
 }
