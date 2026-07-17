@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import type { FatigueLevel } from "@/types/database";
+import { ExerciseCatalog } from "@/components/today/ExerciseCatalog";
 
 const FATIGUE_LEVELS: FatigueLevel[] = [1, 2, 3, 4, 5];
 
@@ -65,69 +66,75 @@ export default function TodayPage() {
     setIsSaving(false);
   }
 
-  if (isLoading) {
-    return (
-      <main className="p-4">
-        <h1 className="text-xl font-bold">今日</h1>
-        <p className="mt-4 text-neutral-400">読み込み中...</p>
-      </main>
-    );
-  }
-
   return (
     <main className="p-4">
       <h1 className="text-xl font-bold">今日</h1>
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-6">
-        <div>
-          <label htmlFor="weight" className="block text-sm text-neutral-400">
-            体重(kg)
-          </label>
-          <input
-            id="weight"
-            type="number"
-            inputMode="decimal"
-            step="0.1"
-            value={weightKg}
-            onChange={(e) => setWeightKg(e.target.value)}
-            className="mt-1 min-h-[44px] w-full rounded-md border border-neutral-700 bg-neutral-900 px-4 py-2 text-neutral-100"
-            placeholder="例: 65.0"
-          />
-        </div>
-
-        <div>
-          <span className="block text-sm text-neutral-400">
-            疲労度(1:楽 〜 5:きつい)
-          </span>
-          <div className="mt-1 flex gap-2">
-            {FATIGUE_LEVELS.map((level) => (
-              <button
-                key={level}
-                type="button"
-                onClick={() => setFatigueLevel(level)}
-                className={`min-h-[44px] flex-1 rounded-md border text-sm ${
-                  fatigueLevel === level
-                    ? "border-amber-500 bg-amber-500/10 text-amber-400"
-                    : "border-neutral-700 text-neutral-300"
-                }`}
-              >
-                {level}
-              </button>
-            ))}
+      {isLoading ? (
+        <p className="mt-4 text-neutral-400">読み込み中...</p>
+      ) : (
+        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+          <div>
+            <label htmlFor="weight" className="block text-sm text-neutral-400">
+              体重(kg)
+            </label>
+            <input
+              id="weight"
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              value={weightKg}
+              onChange={(e) => setWeightKg(e.target.value)}
+              className="mt-1 min-h-[44px] w-full rounded-md border border-neutral-700 bg-neutral-900 px-4 py-2 text-neutral-100"
+              placeholder="例: 65.0"
+            />
           </div>
+
+          <div>
+            <span className="block text-sm text-neutral-400">
+              疲労度(1:楽 〜 5:きつい)
+            </span>
+            <div className="mt-1 flex gap-2">
+              {FATIGUE_LEVELS.map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => setFatigueLevel(level)}
+                  className={`min-h-[44px] flex-1 rounded-md border text-sm ${
+                    fatigueLevel === level
+                      ? "border-amber-500 bg-amber-500/10 text-amber-400"
+                      : "border-neutral-700 text-neutral-300"
+                  }`}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
+          {message && <p className="text-sm text-emerald-400">{message}</p>}
+
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="min-h-[44px] w-full rounded-md bg-amber-500 font-medium text-neutral-950 disabled:opacity-50"
+          >
+            {isSaving ? "保存中..." : "保存"}
+          </button>
+        </form>
+      )}
+
+      {/* 種目カタログは体重・疲労度の読み込み状態に関わらず常に表示する(静的データのため) */}
+      <section className="mt-10">
+        <h2 className="text-lg font-semibold">種目カタログ</h2>
+        <p className="mt-1 text-sm text-neutral-400">
+          フォームを確認しながら種目を選べます。セットの記録・保存は次のステップで実装予定です。
+        </p>
+        <div className="mt-4">
+          <ExerciseCatalog />
         </div>
-
-        {error && <p className="text-sm text-red-400">{error}</p>}
-        {message && <p className="text-sm text-emerald-400">{message}</p>}
-
-        <button
-          type="submit"
-          disabled={isSaving}
-          className="min-h-[44px] w-full rounded-md bg-amber-500 font-medium text-neutral-950 disabled:opacity-50"
-        >
-          {isSaving ? "保存中..." : "保存"}
-        </button>
-      </form>
+      </section>
     </main>
   );
 }
