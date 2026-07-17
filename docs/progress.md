@@ -87,6 +87,37 @@ src/
 
 ### 次にやること
 
-- プロトタイプファイルの有無をユーザーに確認
-- Supabaseプロジェクトの作成(ユーザー側で実施が必要な場合あり)
 - 認証機能の実装から着手
+
+---
+
+## 2026-07-17: Supabase接続セットアップ
+
+### やったこと
+
+1. `supabase/schema.sql` を作成(設計書6章のテーブル定義をそのまま採用)
+2. `.env.local.example` を作成し、`.gitignore` に `!.env*.example` を追加(サンプルファイルは追跡対象、実際の`.env.local`は除外のまま)
+3. `src/lib/supabase/server.ts` にサーバー専用のSupabaseクライアントを実装
+4. ユーザーがSupabaseプロジェクトを新規作成し、`schema.sql`の内容をSQL Editorで実行、`.env.local`に接続情報を設定
+5. 接続確認スクリプトで4テーブル(`profile`, `body_metrics`, `workout_logs`, `workout_sets`)へのSELECTを検証
+
+### トラブルシューティング
+
+- **事象**: `SUPABASE_URL`に誤って`/rest/v1/`を付与してしまい接続失敗 → クライアントライブラリはプロジェクトのベースURLのみを期待し内部で`/rest/v1`を付加するため、パス無しの形に修正
+- **事象**: 修正後も`permission denied for table profile`(Postgresエラーコード`42501`)が発生
+  - ユーザーからの指摘を受け、原始的な推測ではなく系統的に切り分けを実施:
+    1. `.env.local`の読み込み確認(問題なし)
+    2. キーのJWTペイロードをデコードし`role: "service_role"`であることを確認(問題なし)
+    3. `createSupabaseServerClient`の実装確認(問題なし、公式ドキュメント通り)
+    4. リクエストURL・レスポンスヘッダー(`sb-project-ref`等)で正しいプロジェクトのPostgRESTに到達していることを確認
+    5. エラーの発生源はPostgres自身が返す権限エラーであり、クライアント側の実装・設定の問題ではないと結論
+  - **原因**: SQL EditorでCREATE TABLEしただけでは`service_role`ロールへのテーブル権限(GRANT)が自動付与されないケースがあった
+  - **対応**: `supabase/schema.sql`末尾に`grant`/`alter default privileges`文を追加し、SQL Editorで実行してもらい解消
+
+### 動作確認
+
+- 接続確認スクリプト(一時ファイル、確認後削除)で4テーブルすべてに対しSELECTが成功することを確認(いずれも0件、テーブルは空だが正常にアクセス可能な状態)
+
+### 次にやること
+
+- 認証機能(パスコードログイン + `src/proxy.ts`)の実装に着手
