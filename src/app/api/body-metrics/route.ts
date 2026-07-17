@@ -19,6 +19,29 @@ const upsertSchema = z.object({
   ]).optional(),
 });
 
+export async function GET(request: NextRequest) {
+  const dateParam = request.nextUrl.searchParams.get("date");
+  const targetDate = dateParam ?? getTodayDateString();
+  const supabase = createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from("body_metrics")
+    .select("date, weight_kg, body_fat_pct, fatigue_level")
+    .eq("date", targetDate)
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    date: targetDate,
+    weightKg: data?.weight_kg ?? null,
+    bodyFatPct: data?.body_fat_pct ?? null,
+    fatigueLevel: data?.fatigue_level ?? null,
+  });
+}
+
 export async function POST(request: NextRequest) {
   const json = await request.json().catch(() => null);
   const parsed = upsertSchema.safeParse(json);
