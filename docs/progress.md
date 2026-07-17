@@ -121,3 +121,38 @@ src/
 ### 次にやること
 
 - 認証機能(パスコードログイン + `src/proxy.ts`)の実装に着手
+
+---
+
+## 2026-07-17: 認証機能(パスコードログイン)の実装
+
+### やったこと
+
+1. `src/lib/auth.ts`:パスコード照合・トークン発行・検証ロジック
+   - Cookieには生のパスコードを保存せず、`APP_PASSCODE`を鍵にしたHMAC-SHA256のトークンを保存する方式にした(Cookie漏洩時にパスコード自体は特定できない)
+   - パスコード照合・トークン照合はいずれも`timingSafeEqual`でタイミング攻撃を軽減
+2. `src/app/api/auth/login/route.ts`:パスコード照合 → 成功時にhttpOnly Cookie(`auth_token`、30日)を発行
+3. `src/app/api/auth/logout/route.ts`:Cookie削除
+4. `src/app/login/page.tsx`:パスコード入力フォーム(クライアントコンポーネント)
+5. `src/proxy.ts`:全ページ・全APIを保護する認証ガード
+   - **Next.js 16では`middleware.ts`ではなく`proxy.ts`、関数名も`proxy()`**という新しい規約に対応(前回のセットアップ時に確認済みの内容を実装に反映)
+   - `/login`、`/api/auth/login`、静的アセットは保護対象外にmatcherで除外
+   - 未認証時:画面は`/login`へリダイレクト、APIは401 JSON
+
+### 動作確認
+
+`npm run dev`でローカルサーバーを起動し、curlで一通りのフローを確認:
+
+1. 未ログインで`/today`にアクセス → `/login`へ307リダイレクト ✅
+2. 未ログインで`/api/body-metrics`にアクセス → 401 `{"error":"認証が必要です"}` ✅
+3. 誤ったパスコードでログイン → 401 `{"error":"パスコードが違います"}` ✅
+4. 正しいパスコードでログイン → 200 + `Set-Cookie: auth_token=...; HttpOnly; SameSite=lax; Max-Age=2592000` ✅
+5. Cookie付きで`/today`にアクセス → 200 ✅
+6. ログアウト → Cookieが空値+過去日付で上書きされ削除される ✅
+7. ログアウト後に`/today`へアクセス → 再び`/login`へリダイレクト ✅
+
+`.env.local`の`APP_PASSCODE`は動作確認用に仮の値(`temp1234`)を設定済み。本番用の値は後で自由に変更可能。
+
+### 次にやること
+
+- プロフィール画面(身長・体脂肪率・目標の登録、BMI自動算出)の実装
