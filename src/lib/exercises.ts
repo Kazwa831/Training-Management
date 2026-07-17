@@ -1,4 +1,13 @@
 import type { Exercise, ExerciseCategory, ExerciseMedia } from "@/types/exercise";
+import type { DayType } from "@/types/database";
+
+// day_typeの日本語表示ラベル。今日画面・履歴画面・グラフ画面など複数箇所で使うため共通化している
+export const DAY_TYPE_LABELS: Record<DayType, string> = {
+  legs: "下半身",
+  push: "上半身プッシュ",
+  pull: "上半身プル",
+  cardio_core: "有酸素+体幹",
+};
 
 /**
  * 種目カタログ(下半身6・上半身プッシュ6/プル5・体幹3・有酸素4 = 計24種目)。

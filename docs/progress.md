@@ -385,3 +385,38 @@ UI側は当初、`WorkoutRecorder`が`useEffect`でのデータ取得中(`isLoad
 ### 次にやること
 
 - 履歴画面(一覧・詳細表示)
+
+---
+
+## 2026-07-17: 履歴画面(一覧・詳細表示)の実装
+
+### やったこと
+
+1. `DAY_TYPE_LABELS`(day_typeの日本語表示ラベル)を`src/lib/anthropic/suggest.ts`から`src/lib/exercises.ts`に切り出して共通化(今日画面・履歴画面の2箇所以上で使うため)
+2. `src/app/api/history/route.ts`(新規):`GET`で直近60日分(個人利用アプリのためまずはこの件数)の`body_metrics`(体重・疲労度)と`workout_logs`(種目タイプ)を日付ごとにまとめた一覧サマリーを返す。セットの詳細は一覧には含めず、展開時に既存の`/api/body-metrics?date=`・`/api/workout-logs?date=`(どちらも既に日付指定に対応済み)を呼び出す設計にして、一覧取得時の負荷を抑えた
+3. `src/components/history/HistoryList.tsx`(新規):日付降順の一覧を`<details>`で開閉表示。タップ時に初めて詳細(体脂肪率・疲労度・種目ごとのセット実績・有酸素・メモ・AIコメント)を取得して表示する
+4. `src/app/(main)/history/page.tsx`:上記コンポーネントを組み込み
+
+### 動作確認
+
+3日分のテストデータ(下半身の日・記録なしの日・有酸素+体幹の日)を投入し、`npm run dev`+curl+Playwright(実ブラウザ)で確認、確認後にテストデータ・Playwrightを削除:
+
+1. `GET /api/history` → 日付降順で3日分、`body_metrics`と`workout_logs`の情報が日付ごとに正しく統合されている ✅
+2. 履歴一覧画面 → 日付・体重・種目タイプバッジが正しく表示される ✅
+3. 「有酸素+体幹」の日を展開 → 疲労度・有酸素種目(トレッドミル18分/目標20分)・体幹種目(プランク)・AIコメントが表示される ✅
+4. 「下半身」の日を展開 → スクワット2セット(60kg×10回 / 62kg×8回)とメモが正しく表示される ✅
+5. コンソールエラーなし ✅
+
+動作確認中に、体幹種目のように重量が記録されていないセットの表示が「-×30回」と分かりにくかったため、`weight`が無い場合は回数のみ(「30回」)表示するよう修正し、再度スクリーンショットで確認した。
+
+### 変更したファイル一覧
+
+- `src/lib/exercises.ts`:`DAY_TYPE_LABELS`を追加(共通化)
+- `src/lib/anthropic/suggest.ts`:重複していたラベル定義を削除し、共通化したものを使うよう変更
+- `src/app/api/history/route.ts`(新規)
+- `src/components/history/HistoryList.tsx`(新規)
+- `src/app/(main)/history/page.tsx`:一覧を組み込み
+
+### 次にやること
+
+- グラフ画面(体重・体脂肪率・疲労度の推移、種目別重量推移)

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAnthropicClient, SUGGEST_MODEL } from "./client";
-import { getExercisesByCategory } from "@/lib/exercises";
+import { DAY_TYPE_LABELS, getExercisesByCategory } from "@/lib/exercises";
 import type { DayType, FatigueLevel, Goal } from "@/types/database";
 import type { Exercise } from "@/types/exercise";
 
@@ -86,13 +86,6 @@ const GOAL_LABEL: Record<Goal, string> = {
   bulk: "増量",
   cut: "減量",
   maintain: "維持",
-};
-
-const DAY_TYPE_LABEL: Record<DayType, string> = {
-  legs: "下半身",
-  push: "上半身プッシュ",
-  pull: "上半身プル",
-  cardio_core: "有酸素+体幹",
 };
 
 function buildCandidateExercises(dayType: DayType): {
@@ -224,7 +217,7 @@ async function requestAiSuggestion(
 - 身長: ${input.heightCm != null ? `${input.heightCm}cm` : "未設定"}
 - 直近の体脂肪率: ${input.bodyFatPct != null ? `${input.bodyFatPct}%` : "未記録"}
 - 目標: ${input.goal ? GOAL_LABEL[input.goal] : "未設定"}(${goalGuideline})
-- 今日の種目タイプ: ${DAY_TYPE_LABEL[dayType]}(ローテーションにより決定済み)
+- 今日の種目タイプ: ${DAY_TYPE_LABELS[dayType]}(ローテーションにより決定済み)
 
 # 今日選べる種目一覧
 ${candidateList}
