@@ -420,3 +420,38 @@ UI側は当初、`WorkoutRecorder`が`useEffect`でのデータ取得中(`isLoad
 ### 次にやること
 
 - グラフ画面(体重・体脂肪率・疲労度の推移、種目別重量推移)
+
+---
+
+## 2026-07-17: グラフ画面(体重・体脂肪率・疲労度・種目別重量推移)の実装
+
+### やったこと
+
+1. `src/app/api/graph/body-metrics/route.ts`(新規):直近90日分の体重・体脂肪率・疲労度を日付昇順(グラフ表示用)で返す
+2. `src/app/api/graph/exercise-weight/route.ts`(新規):指定した`exerciseId`について、日付ごとの最大重量(1日に複数セットある場合はその日の最大値を代表値とする)を日付昇順で返す
+3. `src/components/graph/BodyMetricsCharts.tsx`(新規):Rechartsの`LineChart`で体重・体脂肪率・疲労度をそれぞれ別カードで表示。単位(kg/%/1-5段階)が異なるため、無理に1つのグラフにまとめず3枚に分けてシンプルさを優先した
+4. `src/components/graph/ExerciseWeightChart.tsx`(新規):種目選択式(`<select>`、カテゴリごとにoptgroup)で種目別の重量推移を表示
+5. `src/app/(main)/graph/page.tsx`に組み込み
+
+### 動作確認(実ブラウザでの確認)
+
+グラフ描画はcurlでは確認できないため、Playwrightを一時的にインストールして実ブラウザで確認(確認後にアンインストール、`package.json`への影響なし)。5日分の体重・体脂肪率・疲労度と、スクワットの重量記録(7/13:55kg → 7/17:62.5kg)を投入して確認:
+
+1. `GET /api/graph/body-metrics` / `GET /api/graph/exercise-weight?exerciseId=squat` → 日付昇順で正しく返る ✅
+2. グラフ画面で体重・体脂肪率・疲労度の3枚の折れ線グラフが表示される ✅
+3. スクリーンショット上で最後の区間(7/16→7/17)が繋がっていないように見えたため、SVGの`<path>`の`d`属性を直接取得して確認したところ、5点すべてを通る1本の連続した曲線になっており、実際には正しく描画されていることを確認(スクリーンショットの見た目だけでは誤解しやすい箇所だった)
+4. 種目別重量推移で「スクワット」の2点(55kg→62.5kg)が正しく表示される ✅
+5. 記録の無い種目(ベンチプレス)に切り替えると「この種目の記録はまだありません。」の分岐表示になる ✅
+6. コンソールエラーなし ✅
+
+### 変更したファイル一覧
+
+- `src/app/api/graph/body-metrics/route.ts`(新規)
+- `src/app/api/graph/exercise-weight/route.ts`(新規)
+- `src/components/graph/BodyMetricsCharts.tsx`(新規)
+- `src/components/graph/ExerciseWeightChart.tsx`(新規)
+- `src/app/(main)/graph/page.tsx`:組み込み
+
+### 次にやること
+
+- 全体動作確認・レスポンシブ調整・Vercelデプロイ(MVP最終ステップ)
