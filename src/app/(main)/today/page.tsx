@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { FatigueLevel } from "@/types/database";
 import { ExerciseCatalog } from "@/components/today/ExerciseCatalog";
+import { WorkoutRecorder } from "@/components/today/WorkoutRecorder";
 
 const FATIGUE_LEVELS: FatigueLevel[] = [1, 2, 3, 4, 5];
 
@@ -14,7 +15,7 @@ type BodyMetricsResponse = {
 };
 
 // 今日画面:体重・疲労度の入力(設計書 5章)
-// TODO(Phase2以前のMVP範囲): AI提案・手動メニュー選択・セット記録・インターバルタイマーは以降のステップで実装する
+// TODO(Phase2以前のMVP範囲): AI提案・インターバルタイマーは以降のステップで実装する
 export default function TodayPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [weightKg, setWeightKg] = useState("");
@@ -125,11 +126,21 @@ export default function TodayPage() {
         </form>
       )}
 
-      {/* 種目カタログは体重・疲労度の読み込み状態に関わらず常に表示する(静的データのため) */}
+      {/* メニュー記録・種目カタログは体重・疲労度の読み込み状態に関わらず常に表示する */}
+      <section className="mt-10">
+        <h2 className="text-lg font-semibold">メニューを記録</h2>
+        <p className="mt-1 text-sm text-neutral-400">
+          種目タイプを選び、実施した種目・セットを記録します。
+        </p>
+        <div className="mt-4">
+          <WorkoutRecorder />
+        </div>
+      </section>
+
       <section className="mt-10">
         <h2 className="text-lg font-semibold">種目カタログ</h2>
         <p className="mt-1 text-sm text-neutral-400">
-          フォームを確認しながら種目を選べます。セットの記録・保存は次のステップで実装予定です。
+          フォームを確認したいときはこちらから種目を探せます。
         </p>
         <div className="mt-4">
           <ExerciseCatalog />
