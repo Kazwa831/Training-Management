@@ -40,7 +40,6 @@ export default function LoginPage() {
 
         <input
           type="password"
-          inputMode="numeric"
           autoFocus
           value={passcode}
           onChange={(event) => setPasscode(event.target.value)}
